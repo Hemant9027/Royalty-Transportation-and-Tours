@@ -9,7 +9,7 @@ import { BUSINESS } from "./constants";
  *    email is attempted via the Resend API and the result ("sent" | "failed") is
  *    persisted on the booking record.
  *  - Otherwise the function returns "not_configured" and NOTHING is claimed to
- *    have been sent. The booking is still stored and visible in the dashboard.
+ *    have been sent. The booking remains in the temporary demo store.
  */
 
 export type NotificationStatus = "not_configured" | "sent" | "failed";

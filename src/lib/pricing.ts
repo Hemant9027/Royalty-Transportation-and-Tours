@@ -1,4 +1,4 @@
-import type { DemoPricingRule } from "@/db/schema";
+import type { DemoPricingRule } from "./models";
 import type { JourneyDetails } from "./booking-schema";
 
 /**

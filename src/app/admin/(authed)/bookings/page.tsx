@@ -203,7 +203,7 @@ export default async function AdminBookingsPage({ searchParams }: { searchParams
       )}
 
       <p className="mt-6 flex items-center gap-2 text-[12px] font-medium text-navy-400">
-        <ClipboardList className="size-3.5" /> Every status change updates the stored record and is visible
+        <ClipboardList className="size-3.5" /> Status changes are temporary and may be lost when the server restarts.
         to the customer on their request page — instantly.
       </p>
     </div>

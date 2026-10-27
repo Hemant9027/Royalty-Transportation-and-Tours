@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { createBooking, BookingValidationError } from "@/lib/bookings";
-import { ensureSeeded } from "@/lib/seed";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/bookings
- * Public endpoint used by the booking wizard. Server-side validation only;
- * persists the request and attempts a notification if configured.
+ * Public endpoint used by the booking wizard. Requests live in process memory
+ * only and are discarded when the serverless instance restarts.
  */
 export async function POST(req: Request) {
   let payload: unknown;
@@ -19,7 +18,6 @@ export async function POST(req: Request) {
   }
 
   try {
-    await ensureSeeded();
     const { booking, quote } = await createBooking(payload);
     return NextResponse.json(
       {

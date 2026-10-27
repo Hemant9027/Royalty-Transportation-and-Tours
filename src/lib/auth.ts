@@ -1,27 +1,14 @@
 import "server-only";
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
-import { eq, and, gt, lt } from "drizzle-orm";
-import { db } from "@/db";
-import { demoAdminSessions, demoAdminUsers } from "@/db/schema";
-
-/**
- * Demo admin authentication.
- *
- * - Opaque 256-bit session tokens; only SHA-256(token) is stored in the DB.
- * - Passwords hashed with scrypt + random salt (never stored in plain text).
- * - Credentials come from environment variables — nothing is hard-coded.
- * - Every admin route/page validates the session server-side.
- */
 
 export const SESSION_COOKIE = "roy_admin_session";
 const SESSION_TTL_HOURS = Number(process.env.DEMO_SESSION_TTL_HOURS ?? 12);
-
-// ---------------------------------------------------------------- passwords
 const SCRYPT_N = 16384;
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
 const KEYLEN = 64;
+let cachedPasswordHash: string | undefined;
 
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -34,7 +21,7 @@ export function hashPassword(password: string): string {
 export function verifyPassword(password: string, stored: string): boolean {
   try {
     const [algo, n, r, p, salt, expected] = stored.split(":");
-    if (algo !== "scrypt") return false;
+    if (algo !== "scrypt" || !n || !r || !p || !salt || !expected) return false;
     const hash = crypto.scryptSync(password, salt, KEYLEN, {
       N: Number(n),
       r: Number(r),
@@ -47,21 +34,16 @@ export function verifyPassword(password: string, stored: string): boolean {
   }
 }
 
-// ---------------------------------------------------------------- sessions
-function sha256(v: string): string {
-  return crypto.createHash("sha256").update(v).digest("hex");
+function sign(value: string): Buffer {
+  const secret = process.env.DEMO_ADMIN_PASSWORD;
+  if (!secret) throw new Error("Demo admin credentials are not configured");
+  return crypto.createHmac("sha256", secret).update(value).digest();
 }
 
-export async function createAdminSession(adminUserId: number): Promise<string> {
-  await db.delete(demoAdminSessions).where(lt(demoAdminSessions.expiresAt, new Date()));
-  const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + SESSION_TTL_HOURS * 3600_000);
-  await db.insert(demoAdminSessions).values({
-    tokenHash: sha256(token),
-    adminUserId,
-    expiresAt,
-  });
-  return token;
+export async function createAdminSession(_adminUserId: number): Promise<string> {
+  const expiresAt = Date.now() + SESSION_TTL_HOURS * 3600_000;
+  const payload = Buffer.from(`${demoAdminEmail()}:${expiresAt}`).toString("base64url");
+  return `${payload}.${sign(payload).toString("base64url")}`;
 }
 
 export interface AdminIdentity {
@@ -72,23 +54,39 @@ export interface AdminIdentity {
 export async function getAdminFromCookie(): Promise<AdminIdentity | null> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  if (!token || !/^[a-f0-9]{64}$/.test(token)) return null;
-  const tokenHash = sha256(token);
-  const rows = await db
-    .select({ id: demoAdminUsers.id, email: demoAdminUsers.email })
-    .from(demoAdminSessions)
-    .innerJoin(demoAdminUsers, eq(demoAdminSessions.adminUserId, demoAdminUsers.id))
-    .where(and(eq(demoAdminSessions.tokenHash, tokenHash), gt(demoAdminSessions.expiresAt, new Date())))
-    .limit(1);
-  return rows[0] ?? null;
+  if (!token || !demoAuthConfigured()) return null;
+  const [payload, signature, ...rest] = token.split(".");
+  if (!payload || !signature || rest.length > 0) return null;
+  let actualSignature: Buffer;
+  try {
+    actualSignature = Buffer.from(signature, "base64url");
+  } catch {
+    return null;
+  }
+  const expectedSignature = sign(payload);
+  if (
+    actualSignature.length !== expectedSignature.length ||
+    !crypto.timingSafeEqual(actualSignature, expectedSignature)
+  ) {
+    return null;
+  }
+  const decoded = Buffer.from(payload, "base64url").toString("utf8");
+  const separator = decoded.lastIndexOf(":");
+  const email = decoded.slice(0, separator);
+  const expiresAt = Number(decoded.slice(separator + 1));
+  if (
+    separator < 0 ||
+    email !== demoAdminEmail() ||
+    !Number.isSafeInteger(expiresAt) ||
+    expiresAt <= Date.now()
+  ) {
+    return null;
+  }
+  return { id: 1, email };
 }
 
 export async function destroyAdminSession(): Promise<void> {
-  const jar = await cookies();
-  const token = jar.get(SESSION_COOKIE)?.value;
-  if (token) {
-    await db.delete(demoAdminSessions).where(eq(demoAdminSessions.tokenHash, sha256(token)));
-  }
+  return;
 }
 
 export async function setSessionCookie(token: string): Promise<void> {
@@ -108,12 +106,15 @@ export async function clearSessionCookie(): Promise<void> {
 }
 
 export async function findAdminByEmail(email: string) {
-  const rows = await db
-    .select()
-    .from(demoAdminUsers)
-    .where(eq(demoAdminUsers.email, email.toLowerCase().trim()))
-    .limit(1);
-  return rows[0] ?? null;
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!demoAuthConfigured() || normalizedEmail !== demoAdminEmail()) return null;
+  const password = process.env.DEMO_ADMIN_PASSWORD!;
+  if (!cachedPasswordHash) cachedPasswordHash = hashPassword(password);
+  return {
+    id: 1,
+    email: normalizedEmail,
+    passwordHash: cachedPasswordHash!,
+  };
 }
 
 export function demoAdminEmail(): string {

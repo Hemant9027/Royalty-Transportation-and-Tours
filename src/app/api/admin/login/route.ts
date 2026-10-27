@@ -7,7 +7,6 @@ import {
   setSessionCookie,
   verifyPassword,
 } from "@/lib/auth";
-import { ensureAdminSeeded } from "@/lib/seed";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,12 +36,11 @@ export async function POST(req: Request) {
   }
 
   try {
-    await ensureAdminSeeded();
     const user = await findAdminByEmail(parsed.data.email);
 
     // Uniform failure timing (also covers "no such user")
     const ok = user ? verifyPassword(parsed.data.password, user.passwordHash) : false;
-    if (!ok) {
+    if (!user || !ok) {
       await new Promise((r) => setTimeout(r, 450));
       return NextResponse.json({ ok: false, error: "Incorrect email or password" }, { status: 401 });
     }

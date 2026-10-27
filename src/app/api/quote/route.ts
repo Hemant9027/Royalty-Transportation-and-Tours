@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { db } from "@/db";
-import { demoPricingRules } from "@/db/schema";
+import { getDemoStore } from "@/lib/demo-store";
 import { evaluateDemoPrice } from "@/lib/pricing";
 import { SERVICE_KEYS } from "@/lib/constants";
 
@@ -36,8 +35,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const rules = await db.select().from(demoPricingRules);
-    const quote = evaluateDemoPrice(parsed.data, rules);
+    const quote = evaluateDemoPrice(parsed.data, getDemoStore().pricingRules);
     if (!quote) {
       return NextResponse.json({ ok: true, quote: null });
     }

@@ -47,8 +47,8 @@ export default async function AdminLoginPage() {
             </div>
           )}
           <p className="mt-5 text-center text-[11.5px] leading-relaxed text-white/40">
-            Demo account credentials come from environment variables only. Sessions are stored
-            server-side and expire automatically.
+            Demo account credentials come from environment variables only. Sessions are signed and
+            expire automatically. Demo data is temporary and may disappear on restart.
           </p>
         </div>
 

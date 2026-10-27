@@ -40,11 +40,11 @@ export function BookingActions({
         if (res.status === 401) router.replace("/admin/login");
         return;
       }
-      setMessage({ tone: "ok", text: kind === "status" ? "Status updated — the customer request page reflects it now." : "Notes saved." });
+      setMessage({ tone: "ok", text: kind === "status" ? "Status updated for this demo instance." : "Notes saved for this demo instance." });
       setNote("");
       router.refresh();
     } catch {
-      setMessage({ tone: "error", text: "Network problem — update not saved." });
+      setMessage({ tone: "error", text: "Network problem — update could not be applied." });
     } finally {
       setBusy(null);
     }
@@ -93,7 +93,7 @@ export function BookingActions({
           Update status
         </button>
         <p className="mt-2 text-[11.5px] leading-relaxed text-navy-400">
-          Updates are stored instantly and become visible on the customer&apos;s request page. No
+          Updates apply to temporary demo data and may be lost when the server restarts. No
           email/SMS/WhatsApp message is sent.
         </p>
       </div>

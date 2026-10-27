@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getAdminFromCookie } from "@/lib/auth";
-import { ensureSeeded } from "@/lib/seed";
 import { AdminShell } from "@/components/admin/admin-shell";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +13,6 @@ export const dynamic = "force-dynamic";
 export default async function AuthedAdminLayout({ children }: { children: ReactNode }) {
   const admin = await getAdminFromCookie();
   if (!admin) redirect("/admin/login");
-
-  await ensureSeeded();
 
   return <AdminShell email={admin.email}>{children}</AdminShell>;
 }

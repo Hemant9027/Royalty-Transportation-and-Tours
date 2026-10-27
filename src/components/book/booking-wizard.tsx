@@ -1096,8 +1096,9 @@ function SummaryRail({ data, quote, step }: { data: WizardData; quote: QuoteStat
       <div className="flex items-start gap-3 rounded-2xl border border-dashed border-navy-900/20 bg-white px-4 py-3.5">
         <FlaskConical className="mt-0.5 size-4 shrink-0 text-aqua-700" />
         <p className="text-[12px] leading-relaxed text-navy-500">
-          <span className="font-bold text-navy-800">Demo booking system.</span> Requests are stored in a
-          demo database for evaluation — no live reservation or payment is triggered.
+          <span className="font-bold text-navy-800">Demo booking system.</span> Requests are held
+          temporarily in server memory and may disappear when the server restarts. They are not sent
+          to the operator, and no live reservation or payment is triggered.
         </p>
       </div>
     </div>

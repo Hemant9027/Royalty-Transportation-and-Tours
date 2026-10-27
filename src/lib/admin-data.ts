@@ -1,17 +1,16 @@
 import "server-only";
-import { and, asc, desc, count, eq, gte, ilike, or, sql, inArray } from "drizzle-orm";
-import { db } from "@/db";
-import { demoBookings, type DemoBooking } from "@/db/schema";
+import { getDemoStore } from "./demo-store";
 import { SERVICE_KEYS, type BookingStatus } from "./constants";
 import { todayInNassau } from "./booking-schema";
 import type { CustomerDetails, JourneyDetails } from "./booking-schema";
+import type { DemoBooking } from "./models";
 
 export const BOOKINGS_PAGE_SIZE = 15;
 
 export interface DashboardStats {
   total: number;
   pending: number;
-  awaitingConfirmation: number; // pending + reviewing + quote_sent
+  awaitingConfirmation: number;
   confirmed: number;
   cancelled: number;
   completed: number;
@@ -21,29 +20,25 @@ export interface DashboardStats {
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const rows = await db
-    .select({
-      total: count(),
-      pending: sql<number>`count(*) filter (where ${demoBookings.status} = 'pending')`,
-      awaiting: sql<number>`count(*) filter (where ${demoBookings.status} in ('pending','reviewing','quote_sent'))`,
-      confirmed: sql<number>`count(*) filter (where ${demoBookings.status} = 'confirmed')`,
-      cancelled: sql<number>`count(*) filter (where ${demoBookings.status} = 'cancelled')`,
-      completed: sql<number>`count(*) filter (where ${demoBookings.status} = 'completed')`,
-      upcoming: sql<number>`count(*) filter (where ${demoBookings.pickupDate} >= ${todayInNassau()} and ${demoBookings.status} in ('pending','reviewing','quote_sent','confirmed'))`,
-      samples: sql<number>`count(*) filter (where ${demoBookings.isSample})`,
-    })
-    .from(demoBookings);
-  const r = rows[0]!;
+  const bookings = getDemoStore().bookings;
+  const awaiting = new Set(["pending", "reviewing", "quote_sent"]);
+  const upcoming = bookings.filter(
+    (booking) =>
+      booking.pickupDate >= todayInNassau() &&
+      (awaiting.has(booking.status) || booking.status === "confirmed"),
+  );
+  const count = (status: BookingStatus) => bookings.filter((booking) => booking.status === status).length;
+  const samples = bookings.filter((booking) => booking.isSample).length;
   return {
-    total: Number(r.total),
-    pending: Number(r.pending),
-    awaitingConfirmation: Number(r.awaiting),
-    confirmed: Number(r.confirmed),
-    cancelled: Number(r.cancelled),
-    completed: Number(r.completed),
-    upcomingJourneys: Number(r.upcoming),
-    sampleRecords: Number(r.samples),
-    realDemoRequests: Number(r.total) - Number(r.samples),
+    total: bookings.length,
+    pending: count("pending"),
+    awaitingConfirmation: bookings.filter((booking) => awaiting.has(booking.status)).length,
+    confirmed: count("confirmed"),
+    cancelled: count("cancelled"),
+    completed: count("completed"),
+    upcomingJourneys: upcoming.length,
+    sampleRecords: samples,
+    realDemoRequests: bookings.length - samples,
   };
 }
 
@@ -51,10 +46,10 @@ export interface BookingListQuery {
   q?: string;
   status?: string;
   service?: string;
-  origin?: string; // "sample" | "live"
-  from?: string; // pickup date from YYYY-MM-DD
+  origin?: string;
+  from?: string;
   to?: string;
-  sort?: string; // createdAt | pickupDate | reference
+  sort?: string;
   dir?: "asc" | "desc";
   page?: number;
 }
@@ -68,90 +63,78 @@ export interface BookingListResult {
 }
 
 export async function listBookings(query: BookingListQuery): Promise<BookingListResult> {
-  const conditions = [];
-
+  let bookings = [...getDemoStore().bookings];
   if (query.q?.trim()) {
-    const q = query.q.trim();
-    const like = `%${q.replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
-    conditions.push(
-      or(
-        ilike(demoBookings.reference, like),
-        sql`${demoBookings.customer}->>'fullName' ilike ${like}`,
-        sql`${demoBookings.customer}->>'email' ilike ${like}`,
-      )!,
+    const q = query.q.trim().toLocaleLowerCase();
+    bookings = bookings.filter(
+      (booking) =>
+        booking.reference.toLocaleLowerCase().includes(q) ||
+        booking.customer.fullName.toLocaleLowerCase().includes(q) ||
+        booking.customer.email.toLocaleLowerCase().includes(q),
     );
   }
   if (query.status && ["pending", "reviewing", "quote_sent", "confirmed", "completed", "cancelled"].includes(query.status)) {
-    conditions.push(eq(demoBookings.status, query.status));
+    bookings = bookings.filter((booking) => booking.status === query.status);
   }
   if (query.service && (SERVICE_KEYS as readonly string[]).includes(query.service)) {
-    conditions.push(eq(demoBookings.serviceKey, query.service));
+    bookings = bookings.filter((booking) => booking.serviceKey === query.service);
   }
-  if (query.origin === "sample") conditions.push(eq(demoBookings.isSample, true));
-  if (query.origin === "live") conditions.push(eq(demoBookings.isSample, false));
+  if (query.origin === "sample") bookings = bookings.filter((booking) => booking.isSample);
+  if (query.origin === "live") bookings = bookings.filter((booking) => !booking.isSample);
   if (query.from && /^\d{4}-\d{2}-\d{2}$/.test(query.from)) {
-    conditions.push(gte(demoBookings.pickupDate, query.from));
+    bookings = bookings.filter((booking) => booking.pickupDate >= query.from!);
   }
   if (query.to && /^\d{4}-\d{2}-\d{2}$/.test(query.to)) {
-    conditions.push(sql`${demoBookings.pickupDate} <= ${query.to}`);
+    bookings = bookings.filter((booking) => booking.pickupDate <= query.to!);
   }
 
-  const where = conditions.length ? and(...conditions) : undefined;
+  const direction = query.dir === "asc" ? 1 : -1;
+  bookings.sort((a, b) => {
+    const comparison =
+      query.sort === "pickupDate"
+        ? a.pickupDate.localeCompare(b.pickupDate)
+        : query.sort === "reference"
+          ? a.reference.localeCompare(b.reference)
+          : a.createdAt.getTime() - b.createdAt.getTime();
+    return comparison * direction || b.id.localeCompare(a.id);
+  });
 
-  const sortCol =
-    query.sort === "pickupDate"
-      ? demoBookings.pickupDate
-      : query.sort === "reference"
-        ? demoBookings.reference
-        : demoBookings.createdAt;
-  const order = query.dir === "asc" ? asc(sortCol) : desc(sortCol);
-
-  const page = Math.max(1, query.page ?? 1);
   const pageSize = BOOKINGS_PAGE_SIZE;
-
-  const [{ total }] = await db.select({ total: count() }).from(demoBookings).where(where);
-  const rows = await db
-    .select()
-    .from(demoBookings)
-    .where(where)
-    .orderBy(order, desc(demoBookings.id))
-    .limit(pageSize)
-    .offset((page - 1) * pageSize);
-
-  const totalNum = Number(total);
+  const total = bookings.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(totalPages, Math.max(1, query.page ?? 1));
   return {
-    rows,
-    total: totalNum,
+    rows: bookings.slice((page - 1) * pageSize, page * pageSize),
+    total,
     page,
     pageSize,
-    totalPages: Math.max(1, Math.ceil(totalNum / pageSize)),
+    totalPages,
   };
 }
 
 export async function recentBookings(limit = 6): Promise<DemoBooking[]> {
-  return db.select().from(demoBookings).orderBy(desc(demoBookings.createdAt)).limit(limit);
+  return [...getDemoStore().bookings]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, limit);
 }
 
 export async function upcomingJourneys(limit = 6): Promise<DemoBooking[]> {
-  return db
-    .select()
-    .from(demoBookings)
-    .where(
-      and(
-        gte(demoBookings.pickupDate, todayInNassau()),
-        inArray(demoBookings.status, ["pending", "reviewing", "quote_sent", "confirmed"]),
-      ),
+  return [...getDemoStore().bookings]
+    .filter(
+      (booking) =>
+        booking.pickupDate >= todayInNassau() &&
+        ["pending", "reviewing", "quote_sent", "confirmed"].includes(booking.status),
     )
-    .orderBy(asc(demoBookings.pickupDate), asc(demoBookings.pickupTime))
-    .limit(limit);
+    .sort((a, b) => a.pickupDate.localeCompare(b.pickupDate) || a.pickupTime.localeCompare(b.pickupTime))
+    .slice(0, limit);
 }
 
 export function bookingCustomer(b: DemoBooking): CustomerDetails {
-  return b.customer as CustomerDetails;
+  return b.customer;
 }
 
 export function bookingJourney(b: DemoBooking): JourneyDetails {
-  return b.journey as JourneyDetails;
+  return b.journey;
 }
 
 export type { BookingStatus };

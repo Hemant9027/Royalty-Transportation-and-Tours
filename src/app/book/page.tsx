@@ -41,8 +41,8 @@ export default async function BookPage({
             </div>
             <p className="flex max-w-xs items-start gap-2 rounded-xl border border-dashed border-navy-900/20 bg-white px-3.5 py-2.5 text-[11.5px] leading-relaxed text-navy-500">
               <FlaskConical className="mt-0.5 size-3.5 shrink-0" />
-              Demo requests are stored for evaluation and confirmed by the operator. No payment is
-              collected.
+              Demo requests are temporary and may disappear when the server restarts. They are not
+              sent to the operator; no payment is collected.
             </p>
           </div>
           <BookingWizard initial={initial} />

@@ -6,10 +6,10 @@ import {
   CheckCircle2,
   CircleAlert,
   ClipboardList,
-  Database,
   FlaskConical,
   Hourglass,
   PlaneLanding,
+  Server,
   XCircle,
 } from "lucide-react";
 import { getDashboardStats, recentBookings, upcomingJourneys, bookingCustomer } from "@/lib/admin-data";
@@ -39,7 +39,7 @@ export default async function AdminDashboardPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold tracking-tight text-navy-950">Dashboard</h1>
           <p className="mt-1.5 text-[13.5px] text-navy-500">
-            Live view of demo booking requests submitted through the website.
+            Temporary view of demo requests held in this server instance.
           </p>
         </div>
         <Link
@@ -53,15 +53,15 @@ export default async function AdminDashboardPage() {
       {/* Data provenance strip */}
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <div className="flex items-center gap-3 rounded-2xl border border-aqua-500/30 bg-aqua-500/[0.06] px-5 py-4">
-          <Database className="size-5 shrink-0 text-aqua-700" />
+          <Server className="size-5 shrink-0 text-aqua-700" />
           <p className="text-[13px] font-semibold text-navy-900">
-            {stats.realDemoRequests} real demo request{stats.realDemoRequests === 1 ? "" : "s"} submitted here
+            {stats.realDemoRequests} demo request{stats.realDemoRequests === 1 ? "" : "s"} currently held in memory
           </p>
         </div>
         <div className="flex items-center gap-3 rounded-2xl border border-amber-300/40 bg-amber-400/[0.08] px-5 py-4">
           <FlaskConical className="size-5 shrink-0 text-amber-600" />
           <p className="text-[13px] font-semibold text-navy-900">
-            {stats.sampleRecords} seeded sample record{stats.sampleRecords === 1 ? "" : "s"} — clearly labelled, excluded from live counts below
+            Demo data is temporary and can reset on server restarts or between serverless instances.
           </p>
         </div>
       </div>

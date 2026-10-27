@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
-import { asc } from "drizzle-orm";
-import { db } from "@/db";
-import { demoPricingRules } from "@/db/schema";
+import { getDemoStore } from "@/lib/demo-store";
 import { demoAdminEmail } from "@/lib/auth";
 import { notifyConfigSummary } from "@/lib/notify";
-import { ensurePricingRulesSeeded } from "@/lib/seed";
 import { ShieldCheck, CircleCheck, CircleDashed, FileWarning } from "lucide-react";
 import { PricingRulesManager } from "@/components/admin/pricing-rules-manager";
 
@@ -22,12 +19,11 @@ const OWNER_VERIFICATION_ITEMS = [
 ];
 
 export default async function AdminSettingsPage() {
-  await ensurePricingRulesSeeded();
-  const rules = await db.select().from(demoPricingRules).orderBy(asc(demoPricingRules.id));
+  const rules = [...getDemoStore().pricingRules].sort((a, b) => a.id - b.id);
 
   const envChecks = [
     { label: "Demo admin account", ok: Boolean(process.env.DEMO_ADMIN_EMAIL && process.env.DEMO_ADMIN_PASSWORD) },
-    { label: "Database connection", ok: Boolean(process.env.DATABASE_URL) },
+    { label: "Temporary in-memory demo storage", ok: true },
     { label: "Email provider (Resend)", ok: process.env.NOTIFY_PROVIDER === "resend" && Boolean(process.env.RESEND_API_KEY) },
   ];
 
@@ -68,8 +64,8 @@ export default async function AdminSettingsPage() {
             ))}
           </ul>
           <p className="mt-4 text-[11.5px] leading-relaxed text-navy-400">
-            Values are never displayed — only configuration status. Passwords are stored as scrypt
-            hashes; sessions are server-side tokens, hashed at rest.
+            Values are never displayed — only configuration status. Admin sessions are signed and
+            booking data is temporary, in-memory demo data.
           </p>
         </section>
 
