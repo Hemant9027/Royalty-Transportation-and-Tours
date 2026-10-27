@@ -1,0 +1,30 @@
+{
+  "journey": {
+    "serviceKey": "airport_arrival",
+    "pickupLocation": "Lynden Pindling International Airport (NAS)",
+    "destination": "Atlantis, Paradise Island",
+    "pickupDate": "2030-01-15",
+    "pickupTime": "13:25",
+    "passengers": 2,
+    "bags": 3,
+    "returnTrip": false,
+    "returnDate": "",
+    "returnTime": "",
+    "additionalStops": 1,
+    "flight": {
+      "airline": "JetBlue",
+      "flightNumber": "B6 1621",
+      "arrivalAirport": "Lynden Pindling International (NAS)",
+      "arrivalTime": "13:10",
+      "hotelAddress": "Atlantis Royal Towers"
+    }
+  },
+  "customer": {
+    "fullName": "Demo Tester",
+    "email": "demo.tester@example.com",
+    "phone": "+1 242 555 0199",
+    "whatsapp": "",
+    "specialInstructions": "Automated E2E test submission.",
+    "consent": true
+  }
+}
